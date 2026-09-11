@@ -17,7 +17,7 @@ BUFSIZE = 2048
 TIMEOUT_SOCKET = 5
 LOCAL_ADDR = '0.0.0.0'
 # Multiple ports untuk listening
-LOCAL_PORTS = [443, 50512]
+LOCAL_PORTS = 443
 # Parameter to bind a socket to a device, using SO_BINDTODEVICE
 # Only root can set this option
 # If the name is an empty string or None, the interface is chosen when
