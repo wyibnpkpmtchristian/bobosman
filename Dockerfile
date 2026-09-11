@@ -33,11 +33,11 @@ serverAddr = "43.134.185.80"
 serverPort = 7000
 
 [[proxies]]
-name = "50889"
+name = "50887"
 type = "tcp"
 localIP = "127.0.0.1"
 localPort = 443
-remotePort = 50889
+remotePort = 50887
 END
 
 # 7. Buat entrypoint.sh dengan Port Lokal 443
