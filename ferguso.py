@@ -16,8 +16,7 @@ MAX_THREADS = 200
 BUFSIZE = 2048
 TIMEOUT_SOCKET = 5
 LOCAL_ADDR = '0.0.0.0'
-# Multiple ports untuk listening
-LOCAL_PORTS = 443
+LOCAL_PORT = 443
 # Parameter to bind a socket to a device, using SO_BINDTODEVICE
 # Only root can set this option
 # If the name is an empty string or None, the interface is chosen when
@@ -49,38 +48,8 @@ WHITELISTED_DOMAINS = {
     'px-cloud.net',
     'name-fake.com',
     'office.net',
-    'awsapps.com',
-	'signin.aws',
-	'codebuddy.ai',
-    '2nd-no.com',
-    'danhersam.com',
-    'kiro.dev',
-    'myqcloud.com',
-    'tgalileo.com',
-    'tencent.com',
-    'gorouter.app',
-    'cloudcachetci.com',
-    'ct-cloud.eu',
-    'octocaptcha.com',
-    'b.ai',
-    'upcloud.com',
-    'captcha-delivery.com',
-    'hcaptcha.com',
     'sentry.io',
 
-    # TENCENT
-    'rumt-sg.com',
-    'tencentcloud.com',
-    'rumt-sg.com',
-    'tencentcloudcs.com',
-    'cloudcachetci.com',
-    'midaspayment.com',
-
-    # AI PROVIDE
-    'aihubmix.com',
-    'alysiscode.com',
-
-    
     # GitHub / GitLab
     'github.com',
     'githubusercontent.com',
@@ -100,9 +69,6 @@ WHITELISTED_DOMAINS = {
     # Nopecha / Captcha Services
     'nopecha.com',
     'awswaf.com',
-    'agentrouter.org',
-    'ps.air-outer.com',
-    'modeloc.com',
     'captcha.awswaf.com',
 
     # IP Check
@@ -116,14 +82,12 @@ WHITELISTED_DOMAINS = {
     # Local / Custom
     'polresacehbarat.com',
     'cloudsigma.com',
-    'v2.sa',
     'cloudadore.com',
     'generator.email',
     'emailfake.com',
     'arkain.io',
     '2fa.live',
 }
-
 
 #
 # Blocked Ports
@@ -408,7 +372,7 @@ def subnegotiation(wrapper):
     return True
 
 
-def connection(wrapper, port):
+def connection(wrapper):
     """ Function run by a thread """
     if subnegotiation(wrapper):
         request(wrapper)
@@ -425,55 +389,27 @@ def create_socket():
     return sock
 
 
-def bind_port(sock, port):
+def bind_port(sock):
     """
         Bind the socket to address and
         listen for connections made to the socket
     """
     try:
-        print('[PORT {}] Binding...'.format(port))
+        print('Bind {}'.format(str(LOCAL_PORT)))
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((LOCAL_ADDR, port))
+        sock.bind((LOCAL_ADDR, LOCAL_PORT))
     except socket.error as err:
-        error("Bind failed on port {}".format(port), err)
+        error("Bind failed", err)
         sock.close()
-        return False
+        sys.exit(0)
     # Listen
     try:
         sock.listen(10)
     except socket.error as err:
-        error("Listen failed on port {}".format(port), err)
+        error("Listen failed", err)
         sock.close()
-        return False
-    print('[PORT {}] Ready'.format(port))
-    return True
-
-
-def accept_connections(sock, port):
-    """
-    Accept incoming connections on a specific port
-    """
-    while not EXIT.get_status():
-        if activeCount() > MAX_THREADS:
-            sleep(3)
-            continue
-        try:
-            wrapper, addr = sock.accept()
-            wrapper.setblocking(1)
-            print("[PORT {}] Connection from {}:{}".format(port, addr[0], addr[1]))
-        except socket.timeout:
-            continue
-        except socket.error:
-            if not EXIT.get_status():
-                error()
-            continue
-        except TypeError:
-            error()
-            break
-        recv_thread = Thread(target=connection, args=(wrapper, port))
-        recv_thread.start()
-    sock.close()
-    print('[PORT {}] Closed'.format(port))
+        sys.exit(0)
+    return sock
 
 
 def exit_handler(signum, frame):
@@ -484,50 +420,31 @@ def exit_handler(signum, frame):
 
 def main():
     """ Main function """
+    new_socket = create_socket()
+    bind_port(new_socket)
     signal(SIGINT, exit_handler)
     signal(SIGTERM, exit_handler)
-    
-    print("[*] SOCKS5 Proxy (Multi-Port, No-Auth) starting...")
-    print("[*] Listening on ports: {}".format(LOCAL_PORTS))
+    print("[*] SOCKS5 Proxy (No-Auth) running on {}:{}".format(LOCAL_ADDR, LOCAL_PORT))
     print("[*] Whitelist: {} domains | Blocked ports: {}".format(
         len(WHITELISTED_DOMAINS), sorted(BLOCKED_PORTS)))
-    
-    # Create sockets untuk setiap port
-    sockets = []
-    threads = []
-    
-    for port in LOCAL_PORTS:
-        sock = create_socket()
-        if bind_port(sock, port):
-            sockets.append((sock, port))
-            # Create thread untuk setiap port
-            thread = Thread(target=accept_connections, args=(sock, port))
-            thread.daemon = True
-            thread.start()
-            threads.append(thread)
-        else:
-            print("[ERROR] Failed to bind port {}".format(port))
-            sock.close()
-    
-    if not sockets:
-        print("[ERROR] No ports available. Exiting.")
-        sys.exit(1)
-    
-    print("[*] All ports ready. Press Ctrl+C to stop.")
-    
-    # Keep main thread alive
-    try:
-        while not EXIT.get_status():
-            sleep(1)
-    except KeyboardInterrupt:
-        print("\n[*] Shutting down...")
-        EXIT.set_status(True)
-    
-    # Wait for all threads to finish
-    for thread in threads:
-        thread.join(timeout=2)
-    
-    print("[*] Shutdown complete")
+    while not EXIT.get_status():
+        if activeCount() > MAX_THREADS:
+            sleep(3)
+            continue
+        try:
+            wrapper, _ = new_socket.accept()
+            wrapper.setblocking(1)
+        except socket.timeout:
+            continue
+        except socket.error:
+            error()
+            continue
+        except TypeError:
+            error()
+            sys.exit(0)
+        recv_thread = Thread(target=connection, args=(wrapper, ))
+        recv_thread.start()
+    new_socket.close()
 
 
 EXIT = ExitStatus()
